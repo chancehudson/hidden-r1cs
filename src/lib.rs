@@ -99,6 +99,7 @@ pub trait Element:
             out[i] = part.into();
             v >>= bits;
         }
+        assert_eq!(v, 0);
         out
     }
 
