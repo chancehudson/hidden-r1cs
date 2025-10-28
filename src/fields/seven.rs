@@ -5,7 +5,7 @@ use crate::*;
 
 const F: u8 = 7;
 
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Copy, Clone, Default, PartialEq)]
 pub struct SevenScalar {
     val: u8,
 }

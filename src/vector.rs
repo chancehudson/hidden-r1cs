@@ -7,6 +7,8 @@ pub struct Vector<E: Element> {
     entries: Vec<E>,
 }
 
+impl<E: Element + Element> Vector<E> {}
+
 impl<E: Element> Vector<E> {
     pub fn new(len: usize) -> Self {
         Self {
@@ -14,18 +16,10 @@ impl<E: Element> Vector<E> {
         }
     }
 
-    pub fn random<R: Rng>(len: usize, rng: &mut R) -> Self {
-        let mut entries = Vec::with_capacity(len);
-        for _ in 0..len {
-            entries.push(E::sample_rand(rng));
-        }
-        Self { entries }
-    }
-
     pub fn sum(&self) -> E {
         let mut out = E::default();
         for v in &self.entries {
-            out += v.clone();
+            out += *v;
         }
         out
     }
@@ -38,9 +32,27 @@ impl<E: Element> Vector<E> {
         out
     }
 
+    pub fn random<R: Rng>(len: usize, rng: &mut R) -> Self {
+        let mut entries = Vec::with_capacity(len);
+        for _ in 0..len {
+            entries.push(E::sample_rand(rng));
+        }
+        Self { entries }
+    }
+
+    /// Is each element in each vector equidistant from the zero element?
+    pub fn is_zero_equidistant(&self, other: &Self) -> bool {
+        for elements in self.entries.iter().zip(other.iter()) {
+            if !elements.0.is_zero_equidistant(elements.1) {
+                return false;
+            }
+        }
+        true
+    }
+
     pub fn is_zero(&self) -> bool {
         for entry in &self.entries {
-            if entry.clone() != E::default() {
+            if *entry != E::default() {
                 return false;
             }
         }
@@ -61,7 +73,7 @@ impl<E: Element> Display for Vector<E> {
         let str = self
             .entries
             .iter()
-            .map(|v| format!("{}", v.clone()))
+            .map(|v| format!("{}", v))
             .collect::<Vec<String>>()
             .join(",");
         f.write_str(&format!("{}", str))?;
@@ -91,6 +103,14 @@ impl<E: Element> IntoIterator for Vector<E> {
     }
 }
 
+impl<'a, E: Element> IntoIterator for &'a Vector<E> {
+    type Item = &'a E;
+    type IntoIter = std::slice::Iter<'a, E>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.entries.iter()
+    }
+}
+
 impl<E: Element> Index<usize> for Vector<E> {
     type Output = E;
     fn index(&self, index: usize) -> &Self::Output {
@@ -117,24 +137,7 @@ impl<E: Element> Mul<E> for Vector<E> {
 impl<E: Element> MulAssign<E> for Vector<E> {
     fn mul_assign(&mut self, rhs: E) {
         for entry in self.entries.iter_mut() {
-            *entry *= rhs.clone();
-        }
-    }
-}
-
-impl<E: Element> Mul for Vector<E> {
-    type Output = Self;
-    fn mul(mut self, rhs: Self) -> Self::Output {
-        self *= rhs;
-        self
-    }
-}
-
-impl<E: Element> MulAssign for Vector<E> {
-    fn mul_assign(&mut self, rhs: Self) {
-        assert_eq!(self.len(), rhs.len());
-        for (i, entry) in self.entries.iter_mut().enumerate() {
-            *entry *= rhs[i].clone();
+            *entry *= rhs;
         }
     }
 }
@@ -151,25 +154,25 @@ impl<E: Element> MulAssign<&Vector<E>> for Vector<E> {
     fn mul_assign(&mut self, rhs: &Self) {
         assert_eq!(self.len(), rhs.len());
         for (i, entry) in self.entries.iter_mut().enumerate() {
-            *entry *= rhs[i].clone();
+            *entry *= rhs[i];
         }
     }
 }
 
-impl<E: Element> Add for Vector<E> {
-    type Output = Self;
-    fn add(mut self, rhs: Self) -> Self::Output {
-        self += rhs;
-        self
-    }
-}
-
-impl<E: Element> AddAssign for Vector<E> {
-    fn add_assign(&mut self, rhs: Self) {
+impl<E: Element> AddAssign<&Self> for Vector<E> {
+    fn add_assign(&mut self, rhs: &Self) {
         assert_eq!(self.len(), rhs.len());
         for (i, entry) in self.entries.iter_mut().enumerate() {
-            *entry += rhs[i].clone();
+            *entry += rhs[i];
         }
+    }
+}
+
+impl<E: Element> Add<&Self> for Vector<E> {
+    type Output = Self;
+    fn add(mut self, rhs: &Self) -> Self::Output {
+        self += rhs;
+        self
     }
 }
 
@@ -184,7 +187,22 @@ impl<E: Element> Add<E> for Vector<E> {
 impl<E: Element> AddAssign<E> for Vector<E> {
     fn add_assign(&mut self, rhs: E) {
         for entry in self.entries.iter_mut() {
-            *entry += rhs.clone();
+            *entry += rhs;
+        }
+    }
+}
+
+impl<E: Element> SubAssign for Vector<E> {
+    fn sub_assign(&mut self, rhs: Self) {
+        *self -= &rhs;
+    }
+}
+
+impl<E: Element> SubAssign<&Self> for Vector<E> {
+    fn sub_assign(&mut self, rhs: &Self) {
+        assert_eq!(self.len(), rhs.len());
+        for (i, entry) in self.entries.iter_mut().enumerate() {
+            *entry -= rhs[i];
         }
     }
 }
@@ -197,11 +215,24 @@ impl<E: Element> Sub for Vector<E> {
     }
 }
 
-impl<E: Element> SubAssign for Vector<E> {
-    fn sub_assign(&mut self, rhs: Self) {
-        assert_eq!(self.len(), rhs.len());
-        for (i, entry) in self.entries.iter_mut().enumerate() {
-            *entry -= rhs[i].clone();
-        }
+impl<E: Element> Sub<&Vector<E>> for Vector<E> {
+    type Output = Vector<E>;
+    fn sub(self, rhs: &Vector<E>) -> Self::Output {
+        self.into_iter()
+            .zip(rhs.iter())
+            .map(|e| e.0 - *e.1)
+            .collect::<Vec<_>>()
+            .into()
+    }
+}
+
+impl<E: Element> Sub<Vector<E>> for &Vector<E> {
+    type Output = Vector<E>;
+    fn sub(self, rhs: Vector<E>) -> Self::Output {
+        self.iter()
+            .zip(rhs.into_iter())
+            .map(|e| *e.0 - e.1)
+            .collect::<Vec<_>>()
+            .into()
     }
 }

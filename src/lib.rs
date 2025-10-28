@@ -27,7 +27,7 @@ use anyhow::Result;
 pub trait Element:
     Sized
     + Default
-    + Clone
+    + Copy
     + Display
     + Add<Output = Self>
     + AddAssign
@@ -41,15 +41,55 @@ pub trait Element:
     + Into<u128>
 {
     const BIT_WIDTH: usize;
+
     /// Is the element the additive identity?
     fn is_zero(&self) -> bool;
 
+    /// Multiplicative identity.
+    fn one() -> Self {
+        Self::from(1)
+    }
+
+    /// Multiplicatively flips a value in centered representation. Additive identity inverse.
+    /// (Negative one)
+    fn negone() -> Self {
+        Self::zero() - Self::one()
+    }
+
+    /// Additive identity.
+    fn zero() -> Self {
+        Self::from(0)
+    }
+
+    /// Are the two values equal distances from the zero value?
+    fn is_zero_equidistant(&self, other: &Self) -> bool {
+        self.zero_dist() == other.zero_dist()
+    }
+
+    /// Determine the distance of an element from the zero element. In a Z_q field, if this element
+    /// is > q/2 returns the negated value of the element.
+    ///
+    /// Distance is a measurement, and so not a field element.
+    fn zero_dist(self) -> u128 {
+        let negative: u128 = (self * Self::negone()).into();
+        let positive: u128 = self.into();
+        negative.min(positive)
+    }
+
     fn sample_rand<R: Rng>(rng: &mut R) -> Self;
 
-    fn as_parts(&self, bits: usize) -> Vector<Self> {
+    /// Determine either number of 2^bits elements in a single element, or upper bound of each
+    /// chunked element given `bits` chunks.
+    fn bits_vec_len(bits: usize) -> usize {
+        Self::BIT_WIDTH.div_ceil(bits)
+    }
+
+    /// Break into `bits` field elements. Returns `ceil(log2(F)) / 8` field elements, each
+    /// containing a value up to `2^bits`.
+    fn as_le_bits_vec(&self, bits: usize) -> Vector<Self> {
         let parts_len = Self::BIT_WIDTH.div_ceil(bits);
         let divisor = 1 << bits;
-        let mut v: u128 = self.clone().into();
+        let mut v: u128 = (*self).into();
         let mut out = Vector::new(parts_len.try_into().expect("base too large"));
         for i in 0..parts_len {
             if v == 0 {
@@ -62,13 +102,15 @@ pub trait Element:
         out
     }
 
-    fn from_parts(parts: Vector<Self>) -> Self {
-        let bits = Self::BIT_WIDTH.div_ceil(parts.len());
-        let mut mult = 1u128 << bits;
+    /// Take `parts.len()` field elements each at most `2^parts.len()` and convert them into a
+    /// single element.
+    fn from_le_bits_vec(parts: Vector<Self>) -> Self {
+        let bits_len = Self::bits_vec_len(parts.len());
+        let mut mult = 1u128 << bits_len;
         let mut out = Self::default();
         for part in parts {
             out += part * mult.into();
-            mult <<= bits;
+            mult <<= bits_len;
         }
         out
     }
@@ -93,8 +135,8 @@ impl<E: Element> R1CS<E> {
     pub fn eval(&self, witness: &Vector<E>) -> Result<Vector<E>> {
         self.assert_consistency()?;
 
-        let ab = (&self.a * witness) * (&self.b * witness);
-        let c = &self.c * witness;
+        let ab = (self.a.clone() * witness) * &(self.b.clone() * witness);
+        let c = self.c.clone() * witness;
 
         Ok(ab - c)
     }

@@ -18,7 +18,7 @@ impl Element for BinaryScalar {
         Self::from(rng.random::<u8>())
     }
 
-    fn as_parts(&self, bits: usize) -> Vector<Self> {
+    fn as_le_bits_vec(&self, bits: usize) -> Vector<Self> {
         assert_eq!(bits, 1);
         [self.clone()].to_vec().into()
     }

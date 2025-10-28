@@ -6,7 +6,7 @@ use crate::*;
 /// 2^64 - 2^32 + 1
 const F: u128 = 18446744069414584321u128;
 
-#[derive(Debug, Clone, Default, PartialEq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct OxfoiScalar {
     val: u128,
 }
@@ -48,22 +48,6 @@ impl Element for OxfoiScalar {
 
     fn sample_rand<R: Rng>(rng: &mut R) -> Self {
         rng.random()
-    }
-
-    fn as_parts(&self, bits: usize) -> Vector<Self> {
-        let parts_len = Self::BIT_WIDTH.div_ceil(bits);
-        let divisor = 1 << bits;
-        let mut v = self.val;
-        let mut out = Vector::new(parts_len.try_into().expect("base too large"));
-        for i in 0..parts_len {
-            if v == 0 {
-                break;
-            }
-            let part = v % divisor;
-            out[i] = part.into();
-            v >>= bits;
-        }
-        out
     }
 }
 

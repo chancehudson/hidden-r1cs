@@ -28,13 +28,14 @@ impl<E: Element> Matrix<E> {
         }
     }
 
+    /// Returns the (height, width) dimension of the matrix. Also known as (rows, columns).
     pub fn dimension(&self) -> (usize, usize) {
-        (self.width, self.height)
+        (self.height, self.width)
     }
 }
 
-impl<E: Element> AddAssign for Matrix<E> {
-    fn add_assign(&mut self, rhs: Self) {
+impl<E: Element> AddAssign<&Self> for Matrix<E> {
+    fn add_assign(&mut self, rhs: &Self) {
         assert_eq!(
             self.width, rhs.width,
             "cannot add matrices of different width"
@@ -45,22 +46,22 @@ impl<E: Element> AddAssign for Matrix<E> {
         );
         for self_row in self.entries.iter_mut() {
             for other_row in rhs.entries.iter() {
-                *self_row += other_row.clone();
+                *self_row += other_row;
             }
         }
     }
 }
 
-impl<E: Element> Add for Matrix<E> {
+impl<E: Element> Add<&Self> for Matrix<E> {
     type Output = Self;
-    fn add(mut self, rhs: Self) -> Self::Output {
+    fn add(mut self, rhs: &Self) -> Self::Output {
         self += rhs;
         self
     }
 }
 
-impl<E: Element> MulAssign for Matrix<E> {
-    fn mul_assign(&mut self, rhs: Self) {
+impl<E: Element> MulAssign<&Self> for Matrix<E> {
+    fn mul_assign(&mut self, rhs: &Self) {
         assert_eq!(
             self.width, rhs.width,
             "cannot mul matrices of different width"
@@ -71,45 +72,44 @@ impl<E: Element> MulAssign for Matrix<E> {
         );
         for self_row in self.entries.iter_mut() {
             for other_row in rhs.entries.iter() {
-                *self_row *= other_row.clone();
+                *self_row *= other_row;
             }
         }
     }
 }
 
-impl<E: Element> Mul for Matrix<E> {
+impl<E: Element> Mul<&Self> for Matrix<E> {
     type Output = Self;
-    fn mul(mut self, rhs: Self) -> Self::Output {
+    fn mul(mut self, rhs: &Self) -> Self::Output {
         self *= rhs;
         self
-    }
-}
-
-impl<E: Element> Mul<Vector<E>> for Matrix<E> {
-    type Output = Vector<E>;
-    fn mul(self, rhs: Vector<E>) -> Self::Output {
-        self * &rhs
     }
 }
 
 impl<E: Element> Mul<&Vector<E>> for Matrix<E> {
     type Output = Vector<E>;
     fn mul(self, rhs: &Vector<E>) -> Self::Output {
-        let mut out = Vector::new(self.height);
-        for (i, row) in self.entries.iter().enumerate() {
-            out[i] = (row.clone() * rhs.clone()).into_sum();
-        }
-        out
+        self.entries
+            .into_iter()
+            .map(|row| (row * rhs).into_sum())
+            .collect::<Vec<_>>()
+            .into()
     }
 }
 
 impl<E: Element> Mul<&Vector<E>> for &Matrix<E> {
     type Output = Vector<E>;
     fn mul(self, rhs: &Vector<E>) -> Self::Output {
-        let mut out = Vector::new(self.height);
-        for (i, row) in self.entries.iter().enumerate() {
-            out[i] = (row.clone() * rhs.clone()).into_sum();
-        }
-        out
+        self.entries
+            .iter()
+            .map(|row| {
+                let mut sum = E::zero();
+                for v in row.iter().zip(rhs.iter()) {
+                    sum += *v.0 * *v.1;
+                }
+                sum
+            })
+            .collect::<Vec<_>>()
+            .into()
     }
 }
