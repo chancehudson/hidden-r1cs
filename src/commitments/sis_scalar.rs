@@ -3,13 +3,13 @@ use crate::*;
 /// Commitments based on the short integer solution problem over a scalar field. Comitted values
 /// should be small/of low norm.
 #[derive(Clone)]
-pub struct SisScalar<E: Element> {
+pub struct SISScalar<E: Element> {
     lattice: Matrix<E>,
     secret: Vector<E>,
     pub commitment: Vector<E>,
 }
 
-impl<E: Element> SisScalar<E> {
+impl<E: Element> SISScalar<E> {
     /// Generate a random lattice and secret, and commit to `val`.
     ///
     /// We commit be decomposing into bits. To get the result of homomorphic operations we need to
@@ -26,7 +26,7 @@ impl<E: Element> SisScalar<E> {
     }
 }
 
-impl<E: Element> Add for SisScalar<E> {
+impl<E: Element> Add for SISScalar<E> {
     type Output = Self;
     fn add(mut self, rhs: Self) -> Self::Output {
         self += rhs;
@@ -34,13 +34,13 @@ impl<E: Element> Add for SisScalar<E> {
     }
 }
 
-impl<E: Element> AddAssign for SisScalar<E> {
+impl<E: Element> AddAssign for SISScalar<E> {
     fn add_assign(&mut self, rhs: Self) {
         self.commitment += rhs.commitment
     }
 }
 
-impl<E: Element> Mul<E> for SisScalar<E> {
+impl<E: Element> Mul<E> for SISScalar<E> {
     type Output = Self;
     fn mul(mut self, rhs: E) -> Self::Output {
         self *= rhs;
@@ -48,13 +48,13 @@ impl<E: Element> Mul<E> for SisScalar<E> {
     }
 }
 
-impl<E: Element> MulAssign<E> for SisScalar<E> {
+impl<E: Element> MulAssign<E> for SISScalar<E> {
     fn mul_assign(&mut self, rhs: E) {
         self.commitment *= rhs;
     }
 }
 
-impl<E: Element> Mul<Vector<E>> for SisScalar<E> {
+impl<E: Element> Mul<Vector<E>> for SISScalar<E> {
     type Output = Self;
     fn mul(mut self, rhs: Vector<E>) -> Self::Output {
         self.commitment *= rhs;
@@ -62,7 +62,7 @@ impl<E: Element> Mul<Vector<E>> for SisScalar<E> {
     }
 }
 
-impl<E: Element> MulAssign<Vector<E>> for SisScalar<E> {
+impl<E: Element> MulAssign<Vector<E>> for SISScalar<E> {
     fn mul_assign(&mut self, rhs: Vector<E>) {
         self.commitment *= rhs;
     }
@@ -82,10 +82,10 @@ mod test {
         let b = Field::sample_rand(rng);
         let c = a.clone() + b.clone();
 
-        let comm_a = SisScalar::commit(a.as_parts(PART_BITS), None, rng);
+        let comm_a = SISScalar::commit(a.as_parts(PART_BITS), None, rng);
         let lattice = comm_a.lattice.clone();
-        let comm_b = SisScalar::commit(b.as_parts(PART_BITS), Some(lattice.clone()), rng);
-        let comm_c = SisScalar::commit(c.as_parts(PART_BITS), Some(lattice.clone()), rng);
+        let comm_b = SISScalar::commit(b.as_parts(PART_BITS), Some(lattice.clone()), rng);
+        let comm_c = SISScalar::commit(c.as_parts(PART_BITS), Some(lattice.clone()), rng);
 
         assert_eq!(comm_c.commitment, (comm_a + comm_b).commitment);
     }
@@ -102,10 +102,10 @@ mod test {
         let b = Field::sample_rand(rng).as_parts(PART_BITS);
         let c = (b.clone() * r.clone()) + a.clone();
 
-        let comm_a = SisScalar::commit(a.clone(), None, rng);
+        let comm_a = SISScalar::commit(a.clone(), None, rng);
         let lattice = comm_a.lattice.clone();
-        let comm_b = SisScalar::commit(b.clone(), Some(lattice.clone()), rng);
-        let comm_c = SisScalar::commit(c.clone(), Some(lattice.clone()), rng);
+        let comm_b = SISScalar::commit(b.clone(), Some(lattice.clone()), rng);
+        let comm_c = SISScalar::commit(c.clone(), Some(lattice.clone()), rng);
 
         assert_eq!(comm_c.commitment, (comm_a + comm_b * r.clone()).commitment);
 
