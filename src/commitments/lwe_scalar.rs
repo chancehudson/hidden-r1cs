@@ -36,8 +36,8 @@ impl<E: Element> LWEScalar<E> {
         let maybe_committed_no_err = &self.lattice * val;
         let err = &self.commitment - maybe_committed_no_err;
         for e in err.iter() {
-            let dist = e.zero_dist();
-            if dist > max_err {
+            let dist = e.zero_disp();
+            if dist.unsigned_abs() > max_err {
                 anyhow::bail!(
                     "Error opening LWE commitment, error vector contains element {} beyond bound {}",
                     dist,
@@ -130,10 +130,11 @@ mod test {
         let e2 = comm_c_homomorphic.try_open(&c.into(), 2)?;
 
         let comm_zero = comm_c_homomorphic - &comm_c;
-        let e_out = comm_zero.try_open(&Vector::new(1), 3)?;
+        // try to open to the zero value
+        let e_out = comm_zero.try_open(&Field::zero().into(), 3)?;
 
         // check that the error vectors match after homomorphic operations
-        assert!((e1 - e2).is_zero_equidistant(&e_out));
+        assert_eq!((e2 - e1), e_out);
 
         Ok(())
     }

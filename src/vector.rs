@@ -40,16 +40,6 @@ impl<E: Element> Vector<E> {
         Self { entries }
     }
 
-    /// Is each element in each vector equidistant from the zero element?
-    pub fn is_zero_equidistant(&self, other: &Self) -> bool {
-        for elements in self.entries.iter().zip(other.iter()) {
-            if !elements.0.is_zero_equidistant(elements.1) {
-                return false;
-            }
-        }
-        true
-    }
-
     pub fn is_zero(&self) -> bool {
         for entry in &self.entries {
             if *entry != E::default() {

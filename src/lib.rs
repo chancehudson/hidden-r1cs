@@ -61,19 +61,17 @@ pub trait Element:
         Self::from(0)
     }
 
-    /// Are the two values equal distances from the zero value?
-    fn is_zero_equidistant(&self, other: &Self) -> bool {
-        self.zero_dist() == other.zero_dist()
-    }
-
-    /// Determine the distance of an element from the zero element. In a Z_q field, if this element
+    /// Determine the displacement of an element from the zero element. In a Z_q field, if this element
     /// is > q/2 returns the negated value of the element.
     ///
     /// Distance is a measurement, and so not a field element.
-    fn zero_dist(self) -> u128 {
+    fn zero_disp(self) -> i128 {
         let negative: u128 = (self * Self::negone()).into();
         let positive: u128 = self.into();
-        negative.min(positive)
+        negative
+            .min(positive)
+            .try_into()
+            .expect("distance value exceeds type")
     }
 
     fn sample_rand<R: Rng>(rng: &mut R) -> Self;

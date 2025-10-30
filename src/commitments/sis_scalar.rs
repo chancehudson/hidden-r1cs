@@ -25,8 +25,8 @@ impl<E: Element> SISScalar<E> {
 
     pub fn try_open(&self, val: &Vector<E>, max_dist: u128) -> Result<()> {
         for v in val.iter() {
-            let dist = v.zero_dist();
-            if dist > max_dist {
+            let dist = v.zero_disp();
+            if dist.unsigned_abs() > max_dist {
                 anyhow::bail!(
                     "Error opening SIS commitment, value contains element {} beyond bound {}",
                     dist,
