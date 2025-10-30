@@ -50,7 +50,8 @@ pub trait Element:
         Self::from(1)
     }
 
-    /// Multiplicatively flips a value in centered representation. Additive identity inverse.
+    /// Multiplicatively flips a value in centered representation.
+    /// Additive inverse of the multiplicative identity.
     /// (Negative one)
     fn negone() -> Self {
         Self::zero() - Self::one()
