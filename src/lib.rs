@@ -114,6 +114,26 @@ pub trait Element:
         }
         out
     }
+
+    /// Return an element as a vector of bytes. Individual implementations may want to provide
+    /// optimized implementations.
+    fn as_le_bytes(&self) -> Vec<u8> {
+        let bits = 8;
+        let parts_len = Self::BIT_WIDTH.div_ceil(bits);
+        let divisor = 1 << bits;
+        let mut v: u128 = (*self).into();
+        let mut out = Vec::default();
+        for i in 0..parts_len {
+            if v == 0 {
+                break;
+            }
+            let part = v % divisor;
+            out[i] = part as u8;
+            v >>= bits;
+        }
+        assert_eq!(v, 0);
+        out
+    }
 }
 
 pub struct R1CS<E: Element> {
@@ -123,8 +143,8 @@ pub struct R1CS<E: Element> {
 }
 
 impl<E: Element> R1CS<E> {
-    pub fn identity(width: usize, height: usize) -> Self {
-        let v = Matrix::new(width, height);
+    pub fn identity(height: usize, width: usize) -> Self {
+        let v = Matrix::zero(height, width);
         Self {
             a: v.clone(),
             b: v.clone(),

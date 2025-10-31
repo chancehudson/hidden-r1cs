@@ -12,7 +12,7 @@ impl<E: Element> LWEScalar<E> {
     pub fn lattice_for<R: Rng>(element_len: usize, rng: &mut R) -> Matrix<E> {
         // m value
         let height: usize = element_len * E::BIT_WIDTH;
-        Matrix::<E>::random(element_len, height, rng)
+        Matrix::<E>::random(height, element_len, rng)
     }
 
     pub fn commit<R: Rng>(val: Vector<E>, lattice: Matrix<E>, rng: &mut R) -> Self {

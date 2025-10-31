@@ -56,6 +56,11 @@ impl<E: Element> Vector<E> {
     pub fn iter(&self) -> impl Iterator<Item = &E> {
         self.entries.iter()
     }
+
+    /// Take the entries from `other` and append them to the end of `self`.
+    pub fn append(&mut self, mut other: Self) {
+        self.entries.append(&mut other.entries);
+    }
 }
 
 impl<E: Element> Display for Vector<E> {

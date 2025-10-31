@@ -1,3 +1,5 @@
+use std::ops::IndexMut;
+
 use super::*;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -8,7 +10,7 @@ pub struct Matrix<E: Element> {
 }
 
 impl<E: Element> Matrix<E> {
-    pub fn new(width: usize, height: usize) -> Self {
+    pub fn zero(height: usize, width: usize) -> Self {
         Self {
             width,
             height,
@@ -16,7 +18,7 @@ impl<E: Element> Matrix<E> {
         }
     }
 
-    pub fn random<R: Rng>(width: usize, height: usize, rng: &mut R) -> Self {
+    pub fn random<R: Rng>(height: usize, width: usize, rng: &mut R) -> Self {
         let mut entries = Vec::with_capacity(height);
         for _ in 0..height {
             entries.push(Vector::random(width, rng));
@@ -31,6 +33,75 @@ impl<E: Element> Matrix<E> {
     /// Returns the (height, width) dimension of the matrix. Also known as (rows, columns).
     pub fn dimension(&self) -> (usize, usize) {
         (self.height, self.width)
+    }
+
+    pub fn height(&self) -> usize {
+        self.dimension().0
+    }
+
+    pub fn width(&self) -> usize {
+        self.dimension().1
+    }
+
+    /// Create a square identity matrix of size x size dimension.
+    pub fn identity(size: usize) -> Self {
+        let mut matrix = Self::zero(size, size);
+        for i in 0..size {
+            matrix[i][i] = E::one();
+        }
+        matrix
+    }
+
+    /// Take two matrices of equal height and create [self, other] by appending each row of `other`
+    /// onto each row of `self`.
+    ///
+    /// Panics if matrices are not of equal height.
+    pub fn compose_horizontal(mut self, other: Self) -> Self {
+        let (self_height, self_width) = self.dimension();
+        let (other_height, other_width) = other.dimension();
+        assert_eq!(
+            self_height, other_height,
+            "Matrix::compose_horizontal cannot compose matrices of unequal height"
+        );
+        self.width = self_width + other_width;
+        for (self_row, other_row) in self.entries.iter_mut().zip(other.entries.into_iter()) {
+            self_row.append(other_row);
+        }
+        self
+    }
+
+    /// Take two matrices of equal width and create [self, other] by appending each column of `other`
+    /// onto each column of `self`.
+    ///
+    /// Panics if matrices are not of equal width.
+    pub fn compose_vertical(mut self, mut other: Self) -> Self {
+        let (self_height, self_width) = self.dimension();
+        let (other_height, other_width) = other.dimension();
+        assert_eq!(
+            self_width, other_width,
+            "Matrix::compose_vertical cannot compose matrices of unequal width"
+        );
+        self.height = self_height + other_height;
+        self.entries.append(&mut other.entries);
+        self
+    }
+
+    /// Get an iterator over each row of the matrix `self`.
+    pub fn iter(&self) -> impl Iterator<Item = &Vector<E>> {
+        self.entries.iter()
+    }
+}
+
+impl<E: Element> Index<usize> for Matrix<E> {
+    type Output = Vector<E>;
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.entries[index]
+    }
+}
+
+impl<E: Element> IndexMut<usize> for Matrix<E> {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        &mut self.entries[index]
     }
 }
 
@@ -111,5 +182,70 @@ impl<E: Element> Mul<&Vector<E>> for &Matrix<E> {
             })
             .collect::<Vec<_>>()
             .into()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn matrix_dimension() {
+        type Field = OxfoiScalar;
+
+        let width = 50;
+        let height = 100;
+        let m = Matrix::<Field>::zero(height, width);
+        assert_eq!(m.dimension(), (height, width));
+        assert_eq!(m.height(), height);
+        assert_eq!(m.width(), width);
+    }
+
+    #[test]
+    fn matrix_identity() {
+        type Field = OxfoiScalar;
+        let mut rng = rand::rng();
+
+        for s in 1..100 {
+            let identity = Matrix::<Field>::identity(s);
+            let vec = Vector::random(s, &mut rng);
+            assert_eq!(vec, &identity * &vec);
+        }
+    }
+
+    #[test]
+    fn matrix_compose_horizontal() {
+        type Field = OxfoiScalar;
+        let mut rng = rand::rng();
+
+        let width1 = 100;
+        let width2 = 50;
+        let m1 = Matrix::<Field>::random(200, width1, &mut rng);
+        let m2 = Matrix::<Field>::random(200, width2, &mut rng);
+
+        let m_composed = m1.compose_horizontal(m2.clone());
+        assert_eq!(m_composed.width(), width1 + width2);
+        for row in m_composed.iter() {
+            assert_eq!(row.len(), width1 + width2);
+            // TODO: check contents of composed vectors
+        }
+    }
+
+    #[test]
+    fn matrix_compose_vertical() {
+        type Field = OxfoiScalar;
+        let mut rng = rand::rng();
+
+        let height1 = 100;
+        let height2 = 50;
+        let m1 = Matrix::<Field>::random(height1, 200, &mut rng);
+        let m2 = Matrix::<Field>::random(height2, 200, &mut rng);
+
+        let m_composed = m1.clone().compose_vertical(m2.clone());
+        assert_eq!(m_composed.height(), height1 + height2);
+        assert_eq!(m_composed.entries.len(), height1 + height2);
+        for (row_composed, row) in m_composed.iter().zip(m1.iter().chain(m2.iter())) {
+            assert_eq!(row_composed, row);
+        }
     }
 }
