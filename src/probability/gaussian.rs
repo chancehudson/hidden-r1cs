@@ -4,14 +4,16 @@ use std::sync::RwLock;
 
 use crate::*;
 
-/// Store a cache of (Element::Cardinality, theta) keyed to a displacement
-/// theta will be stored as theta * 10^5 (up to 5 decimals precision for theta keys)
+/// Store a cache of (Element::Cardinality, sigma) keyed to a displacement
+/// sigma will be stored as sigma * 10^5 (up to 5 decimals precision for sigma keys)
 /// this is independent of the floating point accuracy inside the CDT
 static CDT_CACHE: LazyLock<RwLock<HashMap<(u128, u32), Arc<GaussianCDT>>>> =
     LazyLock::new(|| RwLock::new(HashMap::default()));
+/// How far from the standard deviation we should sample.
+const TAIL_BOUND_MULTIPLIER: f64 = 8.0;
 
-/// An instance of a cumulative distribution table for a finite field, with a specific theta
-/// and specified tail bounds.
+/// An instance of a cumulative distribution table for a finite field, with a specificsigma
+/// and constant tail bounds of TAIL_BOUND_MULTIPLIER * σ.
 ///
 /// Entries in the finite field are referred to by "displacement". Distance from the 0 element,
 /// signed to indicate forward or reverse in the field.
@@ -20,8 +22,11 @@ static CDT_CACHE: LazyLock<RwLock<HashMap<(u128, u32), Arc<GaussianCDT>>>> =
 /// displacement -1, element 1 at displacement 1. Displacement is a measure of distance and
 /// direction, and therefore does not exist in the field because fields are not partially ordered.
 pub struct GaussianCDT {
+    /// Cardinality of the field this CDT operates over
     pub cardinality: u128,
-    pub theta: f64,
+    /// standard deviation of the distribution
+    pub sigma: f64,
+    /// normalized probability sum paired with displacement
     pub displacements: Vec<(f64, i32)>,
     // sum of the PDF evaluated over all possible output values
     pub normalized_sum: f64,
@@ -41,7 +46,7 @@ impl GaussianCDT {
         panic!("sampled probability is outside CDT");
     }
 
-    /// Probability of selecting a displacement in this CDT.
+    /// Probability of selecting a certain displacement in this CDT.
     pub(crate) fn prob(&self, disp: i32) -> f64 {
         for i in 1..self.displacements.len() {
             let (last_prob, last_disp) = self.displacements[i - 1];
@@ -53,21 +58,20 @@ impl GaussianCDT {
         0.0
     }
 
-    /// Compute a cumulative distribution table.
-    pub fn new<F: Element>(theta: f64) -> Arc<Self> {
-        let theta_key = theta * 10f64.powi(5);
+    /// Compute or retrieve a cumulative distribution table.
+    pub fn new<F: Element>(sigma: f64) -> Arc<Self> {
+        let theta_key = sigma * 10f64.powi(5);
         assert!(
             theta_key - theta_key.floor() < 1.0,
-            "CDT: theta is too precise"
+            "CDT: sigma is too precise"
         );
-        assert!(theta_key <= u32::MAX as f64, "CDT: theta is too large");
+        assert!(theta_key <= u32::MAX as f64, "CDT: sigma is too large");
         let theta_key = theta_key as u32;
         if let Some(cdt) = CDT_CACHE.read().unwrap().get(&(F::CARDINALITY, theta_key)) {
             return cdt.clone();
         }
-        // 13*theta gives us ~2^-125 odds that a value will be sampled outside the cdt
-        let dist = (13.0 * theta).ceil() as i32;
-        assert!(dist >= 1, "theta is too small");
+        let dist = (TAIL_BOUND_MULTIPLIER * sigma).ceil() as i32;
+        assert!(dist >= 1, "sigma is too small");
         log::info!("Building CDT with max {} elements", dist * 2 + 1);
         if dist > 50 {
             log::warn!("Building CDT with more than 100 elements. Consider adjusting tail bounds.");
@@ -75,12 +79,12 @@ impl GaussianCDT {
         let mut displacements = Vec::default();
         let mut total_prob = 0f64;
         for disp in -dist..=dist {
-            let prob_exp = (disp as f64).powi(2) / (2.0 * theta * theta);
+            let prob_exp = (disp as f64).powi(2) / (2.0 * sigma * sigma);
             // probability of this displacement being selected
             let prob = f64::exp(-prob_exp);
             displacements.push((prob, disp));
             total_prob += prob;
-            log::debug!("CDT theta {}, disp: {} prob: {}", theta, disp, prob);
+            log::debug!("CDT sigma {}, disp: {} prob: {}", sigma, disp, prob);
         }
         log::debug!("CDT actual size: {}", displacements.len());
         let mut normalized_sum = 0f64;
@@ -92,7 +96,7 @@ impl GaussianCDT {
         }
         let out = Arc::new(Self {
             cardinality: F::CARDINALITY,
-            theta,
+            sigma,
             displacements,
             normalized_sum: total_prob,
         });
@@ -117,8 +121,8 @@ mod test {
         let rng = &mut rand::rng();
 
         for i in 10..100 {
-            let theta = (i as f64) / 10.;
-            let cdt = GaussianCDT::new::<Field>(theta);
+            let sigma = (i as f64) / 10.;
+            let cdt = GaussianCDT::new::<Field>(sigma);
             let mut samples = HashMap::<i32, usize>::default();
             let mut sum = 0f64;
             const TOTAL_SAMPLES: usize = 100_000;
@@ -127,9 +131,9 @@ mod test {
                 sum += disp as f64;
                 *samples.entry(disp as i32).or_default() += 1;
             }
-            // check that mean < 3*theta/sqrt(N)
+            // check that mean < 3*sigma/sqrt(N)
             assert!(
-                (sum / TOTAL_SAMPLES as f64).abs() < (3. * theta) / (TOTAL_SAMPLES as f64).sqrt()
+                (sum / TOTAL_SAMPLES as f64).abs() < (3. * sigma) / (TOTAL_SAMPLES as f64).sqrt()
             );
         }
     }
@@ -140,8 +144,8 @@ mod test {
         let rng = &mut rand::rng();
 
         for i in 10..100 {
-            let theta = (i as f64) / 10.;
-            let cdt = GaussianCDT::new::<Field>(theta);
+            let sigma = (i as f64) / 10.;
+            let cdt = GaussianCDT::new::<Field>(sigma);
             let mut samples = HashMap::<i32, usize>::default();
             let mut sum = 0f64;
             const TOTAL_SAMPLES: usize = 100_000;
@@ -157,8 +161,8 @@ mod test {
             }
             let variance = variance / TOTAL_SAMPLES as f64;
             let std_dev = variance.sqrt();
-            let percent_diff = ((std_dev - theta) / theta).abs();
-            // measured std_dev within 1% of theta
+            let percent_diff = ((std_dev - sigma) / sigma).abs();
+            // measured std_dev within 1% ofsigma
             assert!(percent_diff < 0.01);
         }
     }
@@ -169,8 +173,8 @@ mod test {
         let rng = &mut rand::rng();
 
         for i in 10..100 {
-            let theta = (i as f64) / 10.;
-            let cdt = GaussianCDT::new::<Field>(theta);
+            let sigma = (i as f64) / 10.;
+            let cdt = GaussianCDT::new::<Field>(sigma);
             let mut total_neg = 0f64;
             let mut total_pos = 0f64;
             const TOTAL_SAMPLES: usize = 100_000;
@@ -193,8 +197,8 @@ mod test {
         let rng = &mut rand::rng();
 
         for i in 10..100 {
-            let theta = (i as f64) / 10.;
-            let cdt = GaussianCDT::new::<Field>(theta);
+            let sigma = (i as f64) / 10.;
+            let cdt = GaussianCDT::new::<Field>(sigma);
             let mut samples = HashMap::<i32, usize>::default();
             const TOTAL_SAMPLES: usize = 100_000;
             for _ in 0..TOTAL_SAMPLES {
@@ -202,7 +206,7 @@ mod test {
                 *samples.entry(disp as i32).or_default() += 1;
             }
             let mut chi_sq = 0f64;
-            for disp in ((-theta * 10.) as i32)..((theta * 10.) as i32) {
+            for disp in ((-sigma * 10.) as i32)..((sigma * 10.) as i32) {
                 let count = samples.entry(disp).or_default();
                 let expected = cdt.prob(disp) * TOTAL_SAMPLES as f64;
                 if expected < 1.0 {
