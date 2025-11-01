@@ -8,6 +8,7 @@ pub struct BinaryScalar {
 }
 
 impl Element for BinaryScalar {
+    const CARDINALITY: u128 = F as u128;
     const BIT_WIDTH: usize = 1;
 
     fn is_zero(&self) -> bool {

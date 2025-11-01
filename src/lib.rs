@@ -1,6 +1,7 @@
 mod commitments;
 mod fields;
 mod matrix;
+mod probability;
 mod vector;
 
 #[cfg(test)]
@@ -9,6 +10,7 @@ mod test;
 use commitments::*;
 use fields::*;
 use matrix::*;
+use probability::*;
 use rand::Rng;
 use vector::*;
 
@@ -20,6 +22,7 @@ use std::ops::Mul;
 use std::ops::MulAssign;
 use std::ops::Sub;
 use std::ops::SubAssign;
+use std::sync::LazyLock;
 
 use anyhow::Result;
 
@@ -41,6 +44,7 @@ pub trait Element:
     + Into<u128>
 {
     const BIT_WIDTH: usize;
+    const CARDINALITY: u128;
 
     /// Is the element the additive identity?
     fn is_zero(&self) -> bool;
@@ -62,17 +66,36 @@ pub trait Element:
         Self::from(0)
     }
 
+    /// Return the finite field element at a certain displacement.
+    fn at_displacement(disp: i32) -> Self {
+        if disp.abs() as u128 > Self::CARDINALITY / 2 {
+            log::error!(
+                "Attempting to initialize a displacement outside the field: {} {}",
+                disp,
+                Self::CARDINALITY
+            );
+            #[cfg(not(debug_assertions))]
+            panic!("refusing to use displacement outside of field in production");
+        }
+        if disp >= 0 {
+            Self::from(disp.abs() as u128)
+        } else {
+            Self::from(Self::CARDINALITY - disp.abs() as u128)
+        }
+    }
+
     /// Determine the displacement of an element from the zero element. In a Z_q field, if this element
     /// is > q/2 returns the negated value of the element.
     ///
     /// Distance is a measurement, and so not a field element.
-    fn zero_disp(self) -> i128 {
-        let negative: u128 = (self * Self::negone()).into();
-        let positive: u128 = self.into();
-        negative
-            .min(positive)
-            .try_into()
-            .expect("distance value exceeds type")
+    fn displacement(self) -> i128 {
+        // distance from the zero element in the positive dimension only
+        let dist: u128 = self.into();
+        if self.into() > (Self::CARDINALITY / 2) {
+            -((Self::CARDINALITY - dist) as i128)
+        } else {
+            dist as i128
+        }
     }
 
     fn sample_rand<R: Rng>(rng: &mut R) -> Self;

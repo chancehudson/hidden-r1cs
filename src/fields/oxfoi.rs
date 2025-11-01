@@ -40,6 +40,7 @@ impl Into<u128> for OxfoiScalar {
 }
 
 impl Element for OxfoiScalar {
+    const CARDINALITY: u128 = F as u128;
     const BIT_WIDTH: usize = 64;
 
     fn is_zero(&self) -> bool {

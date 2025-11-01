@@ -36,11 +36,11 @@ impl<E: Element> LWEScalar<E> {
         let maybe_committed_no_err = &self.lattice * val;
         let err = &self.commitment - maybe_committed_no_err;
         for e in err.iter() {
-            let dist = e.zero_disp();
-            if dist.unsigned_abs() > max_err {
+            let disp = e.displacement();
+            if disp.unsigned_abs() > max_err {
                 anyhow::bail!(
-                    "Error opening LWE commitment, error vector contains element {} beyond bound {}",
-                    dist,
+                    "Error opening LWE commitment, error vector contains element {} beyond displacement bound {}",
+                    disp,
                     max_err
                 );
             }

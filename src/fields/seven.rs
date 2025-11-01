@@ -47,6 +47,7 @@ impl Into<u128> for SevenScalar {
 }
 
 impl Element for SevenScalar {
+    const CARDINALITY: u128 = F as u128;
     const BIT_WIDTH: usize = 8;
 
     fn is_zero(&self) -> bool {
